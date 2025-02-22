@@ -1,0 +1,34 @@
+import cv2
+import numpy as np
+import time
+from multiprocessing import Pool, cpu_count
+
+def binarize_part(fragment_threshold):
+    fragment, threshold = fragment_threshold
+    return np.where(fragment > threshold, 255, 0).astype(np.uint8)
+
+def main():
+    image = cv2.imread("image.png", cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        print("Error: Could not load image.")
+        return
+    
+    threshold = 128
+    num_workers = cpu_count()  # Get number of CPU cores
+
+    # 📌 **PARTITION**: Split image into sections for each core
+    fragments = np.array_split(image, num_workers, axis=0)
+
+    # 📌 **MAPPING & AGGLOMERATION**
+    start_time = time.time()
+    with Pool(num_workers) as pool:
+        binarized_fragments = pool.map(binarize_part, [(frag, threshold) for frag in fragments])
+    end_time = time.time()
+
+    final_image = np.vstack(binarized_fragments)
+    cv2.imwrite("binarized_image_cpu.png", final_image)
+
+    print(f"Multi-Core CPU Processing Time: {end_time - start_time:.4f} sec")
+
+if __name__ == "__main__":
+    main()
