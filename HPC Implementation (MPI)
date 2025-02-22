@@ -1,0 +1,46 @@
+from mpi4py import MPI
+import numpy as np
+import cv2
+import time
+
+# MPI Initialization
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+def binarize_fragment(fragment, threshold):
+    return np.where(fragment > threshold, 255, 0).astype(np.uint8)
+
+def main():
+    if rank == 0:
+        # Load the image
+        image = cv2.imread("image.png", cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            print("Error: Could not load image.")
+            comm.Abort()
+
+        height, width = image.shape
+        fragments = np.array_split(image, size, axis=0)  # 📌 **PARTITION**
+
+    else:
+        fragments = None  # Worker nodes start without data
+
+    # 📌 **COMMUNICATION**: Distribute image segments
+    local_fragment = comm.scatter(fragments, root=0)
+
+    # 📌 **MAPPING**: Each process processes its fragment
+    start_time = time.time()
+    binarized_fragment = binarize_fragment(local_fragment, 128)
+    end_time = time.time()
+    print(f"[Process {rank}] Processing time: {end_time - start_time:.4f} seconds")
+
+    # 📌 **AGGLOMERATION**: Collect results in root process
+    binarized_fragments = comm.gather(binarized_fragment, root=0)
+
+    if rank == 0:
+        final_image = np.vstack(binarized_fragments)
+        cv2.imwrite("binarized_image_mpi.png", final_image)
+        print("Binarized image saved as 'binarized_image_mpi.png'")
+
+if __name__ == "__main__":
+    main()
