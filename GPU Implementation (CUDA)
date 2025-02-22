@@ -1,0 +1,42 @@
+import cv2
+import numpy as np
+import cupy as cp
+import time
+import matplotlib.pyplot as plt
+
+def binarize_gpu(image, threshold):
+    """ Perform image binarization using GPU with CuPy. """
+    img_gpu = cp.asarray(image)  # 📌 **PARTITION**: Copy image to GPU
+    binarized_gpu = cp.where(img_gpu > threshold, 255, 0).astype(cp.uint8)  # 📌 **MAPPING** (GPU parallel execution)
+    return cp.asnumpy(binarized_gpu)  # 📌 **AGGLOMERATION**: Bring back to CPU
+
+def main():
+    image = cv2.imread("image.png", cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        print("Error: Could not load image.")
+        return
+    
+    threshold = 128
+
+    # CPU Processing
+    start_cpu = time.time()
+    binarized_cpu = np.where(image > threshold, 255, 0).astype(np.uint8)
+    end_cpu = time.time()
+
+    # GPU Processing
+    start_gpu = time.time()
+    binarized_gpu = binarize_gpu(image, threshold)
+    end_gpu = time.time()
+
+    # Calculate Speedup
+    speedup = (end_cpu - start_cpu) / (end_gpu - start_gpu)
+
+    print(f"CPU Time: {end_cpu - start_cpu:.4f} sec")
+    print(f"GPU Time: {end_gpu - start_gpu:.4f} sec")
+    print(f"Speedup: {speedup:.2f}x")
+
+    # Save Results
+    cv2.imwrite("binarized_image_gpu.png", binarized_gpu)
+
+if __name__ == "__main__":
+    main()
